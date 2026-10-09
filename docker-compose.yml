@@ -1,0 +1,55 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fleetsignal}
+      MYSQL_USER: ${MYSQL_USER:-fleetsignal}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-root-password}
+    ports:
+      - "${MYSQL_PORT_FORWARD:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-local-root-password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fleetsignal}
+      MYSQL_USER: ${MYSQL_USER:-fleetsignal}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+    ports:
+      - "${PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  analytics:
+    build: ./analytics
+    profiles: ["tools"]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fleetsignal}
+      MYSQL_USER: ${MYSQL_USER:-fleetsignal}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      SPEEDING_THRESHOLD_KMH: ${SPEEDING_THRESHOLD_KMH:-100}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
